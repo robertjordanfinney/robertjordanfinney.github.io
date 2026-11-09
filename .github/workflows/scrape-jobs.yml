@@ -16,7 +16,7 @@ concurrency:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -46,7 +46,23 @@ jobs:
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          # Application / proposal drafts (Claude). Drafting is off without a key.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          APPLICANT_PROFILE: ${{ secrets.APPLICANT_PROFILE }}
+          MAX_DRAFTS_PER_RUN: ${{ vars.MAX_DRAFTS_PER_RUN }}
         run: python scraper/scrape.py
+
+      # Drafts hold your personal details, so they are never committed. They are
+      # emailed (SMTP secrets). Artifacts on a PUBLIC repo can be downloaded by
+      # anyone, so this upload only runs if you set the repository variable
+      # UPLOAD_DRAFTS=true -- do that only if the repo is private.
+      - name: Upload drafts
+        if: always() && vars.UPLOAD_DRAFTS == 'true' && hashFiles('drafts/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-drafts-${{ github.run_id }}
+          path: drafts/
+          retention-days: 90
 
       - name: Commit results
         run: |

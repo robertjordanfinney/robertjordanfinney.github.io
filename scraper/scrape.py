@@ -9,9 +9,12 @@ Writes:
     jobs/jobs.json  - every matching posting seen in the last `retention_days`
     jobs/feed.xml   - RSS feed of the newest postings (subscribe in any reader)
 
+    drafts/<date>/  - application / proposal drafts for new postings (needs
+                      ANTHROPIC_API_KEY; see drafter.py). Not published.
+
 Optional email digest of new postings when SMTP_HOST, SMTP_USER,
 SMTP_PASSWORD and EMAIL_TO are set (SMTP_PORT defaults to 465, EMAIL_FROM to
-SMTP_USER).
+SMTP_USER). Drafts are attached to the email.
 """
 
 from __future__ import annotations
@@ -34,12 +37,14 @@ from xml.sax.saxutils import escape
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import drafter  # noqa: E402
 import sources  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
 DATA_PATH = ROOT / "jobs" / "jobs.json"
 FEED_PATH = ROOT / "jobs" / "feed.xml"
+DRAFTS_DIR = ROOT / "drafts"
 SITE_URL = os.environ.get("SITE_URL", "https://robertjordanfinney.github.io/jobs/")
 
 log = logging.getLogger("scraper")
@@ -199,7 +204,7 @@ def write_feed(items: list[dict], config: dict, path: Path) -> None:
     path.write_text("\n".join(parts) + "\n", encoding="utf-8")
 
 
-def send_email(new: list[dict], config: dict) -> None:
+def send_email(new: list[dict], config: dict, drafts: dict[str, Path] | None = None) -> None:
     host, user, pw, to = (os.environ.get(k) for k in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "EMAIL_TO"))
     if not (host and user and pw and to):
         log.info("Email digest skipped (SMTP secrets not set)")
@@ -207,6 +212,7 @@ def send_email(new: list[dict], config: dict) -> None:
     if not new:
         log.info("Email digest skipped (nothing new)")
         return
+    drafts = drafts or {}
     labels = {k: v["label"] for k, v in config["categories"].items()}
     lines = [f"{len(new)} new posting(s) found {date.today():%B %d, %Y}.", f"All postings: {SITE_URL}", ""]
     html_rows = []
@@ -218,15 +224,20 @@ def send_email(new: list[dict], config: dict) -> None:
         html_rows.append(f"<h3>{escape(label)} ({len(group)})</h3><ul>")
         for j in group:
             meta = " · ".join(filter(None, [j.get("company"), j.get("location"), j.get("source")]))
-            lines += [f"- {j['title']}", f"  {meta}", f"  {j['url']}", ""]
+            note = f"Draft attached: {drafts[j['id']].name}" if j["id"] in drafts else ""
+            lines += [f"- {j['title']}", f"  {meta}", f"  {j['url']}"] + ([f"  {note}"] if note else []) + [""]
             html_rows.append(
                 f'<li><a href="{escape(j["url"])}">{escape(j["title"])}</a><br>'
-                f'<small>{escape(meta)}</small></li>'
+                f'<small>{escape(meta)}</small>'
+                + (f'<br><small><b>{escape(note)}</b></small>' if note else "")
+                + "</li>"
             )
         html_rows.append("</ul>")
 
     msg = EmailMessage()
-    msg["Subject"] = f"{len(new)} new video production leads"
+    msg["Subject"] = f"{len(new)} new video production leads" + (
+        f", {len(drafts)} drafts ready" if drafts else ""
+    )
     msg["From"] = os.environ.get("EMAIL_FROM") or user
     msg["To"] = to
     msg.set_content("\n".join(lines))
@@ -234,6 +245,10 @@ def send_email(new: list[dict], config: dict) -> None:
         f"<p>{len(new)} new posting(s). <a href=\"{escape(SITE_URL)}\">View all</a></p>" + "".join(html_rows),
         subtype="html",
     )
+    for path in drafts.values():
+        msg.add_attachment(
+            path.read_bytes(), maintype="text", subtype="markdown", filename=path.name
+        )
     port = int(os.environ.get("SMTP_PORT") or 465)
     try:
         if port == 465:
@@ -306,7 +321,11 @@ def main(argv: list[str] | None = None) -> int:
     }
     DATA_PATH.write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     write_feed(all_jobs, config, FEED_PATH)
-    send_email(new, config)
+    labels = {k: v["label"] for k, v in config["categories"].items()}
+    drafted = drafter.draft_new(new, labels, DRAFTS_DIR / today.isoformat())
+    if drafted and not os.environ.get("SMTP_HOST") and os.environ.get("GITHUB_ACTIONS"):
+        log.warning("%d drafts written but no SMTP secrets set, so they won't reach you", len(drafted))
+    send_email(new, config, {job["id"]: path for job, path in drafted})
     return 0
 
 
