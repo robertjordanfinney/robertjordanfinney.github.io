@@ -1,0 +1,53 @@
+{
+  "max_age_days": 30,
+  "retention_days": 60,
+  "categories": {
+    "rfp": {
+      "label": "Video Production RFP",
+      "require_all": [
+        "\\b(rfp|rfq|rfi|request for (proposals?|quotes?|qualifications|information)|solicitation|invitation (to|for) bid|itb|bid notice|tender)\\b",
+        "\\b(video|videography|film(ing|making)?|cinematograph\\w*|production services|multimedia|commercial production|documentary|livestream(ing)?)\\b"
+      ]
+    },
+    "dp": {
+      "label": "Director of Photography",
+      "require_all": ["\\b(director of photography|DoP)\\b"]
+    },
+    "cinematographer": {
+      "label": "Cinematographer / Videographer",
+      "require_all": ["\\b(cinematographers?|videographers?|camera operators?|steadicam operators?)\\b"]
+    }
+  },
+  "exclude": [
+    "\\bwedding photographer\\b",
+    "\\bphoto booth\\b",
+    "\\bsecurity camera\\b",
+    "\\bcctv\\b"
+  ],
+  "search_queries": {
+    "rfp": [
+      "\"request for proposals\" \"video production\"",
+      "RFP \"video production services\"",
+      "RFQ videography services",
+      "\"invitation to bid\" \"video production\"",
+      "solicitation \"video production\" services"
+    ],
+    "jobs": [
+      "cinematographer job hiring",
+      "\"director of photography\" hiring",
+      "videographer job opening",
+      "\"director of photography\" crew call"
+    ]
+  },
+  "job_board_keywords": [
+    "cinematographer",
+    "director of photography",
+    "videographer",
+    "camera operator"
+  ],
+  "extra_rss_feeds": [],
+  "sam_gov": {
+    "keywords": ["video production", "videography", "film production"],
+    "naics": ["512110"]
+  }
+}

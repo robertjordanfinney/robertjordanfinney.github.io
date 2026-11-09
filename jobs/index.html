@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Production Leads</title>
+<link rel="alternate" type="application/rss+xml" title="Video Production Leads" href="feed.xml">
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --line: #e3e2dc;
+    --accent: #c2410c; --new: #15803d; --chip: #efeee9;
+    --rfp: #1d4ed8; --dp: #7c3aed; --cinematographer: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413; --card: #1f1f1d; --text: #ecebe6; --muted: #9c9b94; --line: #33332f;
+      --accent: #fb923c; --new: #4ade80; --chip: #2a2a27;
+      --rfp: #93c5fd; --dp: #c4b5fd; --cinematographer: #fcd34d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .sub a { color: var(--accent); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .controls input[type=search] { flex: 1 1 220px; padding: 9px 12px; border: 1px solid var(--line);
+         border-radius: 8px; background: var(--card); color: var(--text); font: inherit; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+  .tabs button { border: 1px solid var(--line); background: var(--card); color: var(--text);
+         padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 14px; cursor: pointer; }
+  .tabs button[aria-pressed=true] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  label.toggle { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+  .job { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+         padding: 14px 16px; margin-bottom: 10px; }
+  .job h2 { font-size: 16px; margin: 0 0 4px; line-height: 1.35; }
+  .job h2 a { color: var(--text); text-decoration: none; }
+  .job h2 a:hover { color: var(--accent); text-decoration: underline; }
+  .meta { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .summary { font-size: 14px; margin: 8px 0 0; color: var(--muted);
+         display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
+         background: var(--chip); margin-right: 4px; }
+  .chip.rfp { color: var(--rfp); } .chip.dp { color: var(--dp); } .chip.cinematographer { color: var(--cinematographer); }
+  .chip.new { color: var(--new); }
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
+  .count { color: var(--muted); font-size: 14px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Video Production Leads</h1>
+  <p class="sub">RFPs, cinematographer and director of photography postings, scraped daily.
+    <span id="updated"></span> · <a href="feed.xml">RSS feed</a></p>
+
+  <div class="tabs" id="tabs" role="group" aria-label="Category"></div>
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search title, company, location…" aria-label="Search">
+    <label class="toggle"><input type="checkbox" id="newOnly"> New in last 3 days</label>
+  </div>
+  <div class="count" id="count"></div>
+  <div id="list"><p class="empty">Loading…</p></div>
+</main>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  let data;
+  try {
+    data = await (await fetch("jobs.json", { cache: "no-cache" })).json();
+  } catch (e) {
+    $("list").innerHTML = '<p class="empty">Could not load jobs.json.</p>';
+    return;
+  }
+  const cats = data.categories || {};
+  const jobs = data.jobs || [];
+  if (data.updated) $("updated").textContent = "Last run " + new Date(data.updated).toLocaleString() + ".";
+
+  const recent = new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10);
+  let active = "all";
+  try { active = localStorage.getItem("vpl-tab") || "all"; } catch (e) {}
+
+  const tabs = [["all", "All"], ...Object.entries(cats)];
+  if (!tabs.some(([k]) => k === active)) active = "all";
+  $("tabs").innerHTML = tabs.map(([k, label]) => {
+    const n = k === "all" ? jobs.length : jobs.filter(j => j.categories.includes(k)).length;
+    return `<button data-k="${k}" aria-pressed="${k === active}">${label} (${n})</button>`;
+  }).join("");
+  $("tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    active = b.dataset.k;
+    try { localStorage.setItem("vpl-tab", active); } catch (e) {}
+    $("tabs").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    render();
+  });
+  $("q").addEventListener("input", render);
+  $("newOnly").addEventListener("change", render);
+
+  const esc = (s) => String(s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const safeUrl = (u) => /^https?:\/\//i.test(u) ? u : "#";
+
+  function render() {
+    const q = $("q").value.trim().toLowerCase();
+    const newOnly = $("newOnly").checked;
+    const shown = jobs.filter(j =>
+      (active === "all" || j.categories.includes(active)) &&
+      (!newOnly || j.first_seen >= recent) &&
+      (!q || [j.title, j.company, j.location, j.summary, j.source].join(" ").toLowerCase().includes(q))
+    );
+    $("count").textContent = `${shown.length} posting${shown.length === 1 ? "" : "s"}`;
+    if (!shown.length) {
+      $("list").innerHTML = '<p class="empty">No postings match yet. The scraper runs every morning.</p>';
+      return;
+    }
+    $("list").innerHTML = shown.map(j => `
+      <article class="job">
+        <div>${j.first_seen >= recent ? '<span class="chip new">New</span>' : ""}${
+          j.categories.map(c => `<span class="chip ${esc(c)}">${esc(cats[c] || c)}</span>`).join("")}</div>
+        <h2><a href="${esc(safeUrl(j.url))}" target="_blank" rel="noopener">${esc(j.title)}</a></h2>
+        <div class="meta">
+          ${j.company ? `<span>${esc(j.company)}</span>` : ""}
+          ${j.location ? `<span>${esc(j.location)}</span>` : ""}
+          <span>via ${esc(j.source)}</span>
+          <span>${j.posted ? "posted " + esc(j.posted) : "found " + esc(j.first_seen)}</span>
+          ${j.deadline ? `<span>due ${esc(j.deadline)}</span>` : ""}
+        </div>
+        ${j.summary ? `<p class="summary">${esc(j.summary)}</p>` : ""}
+      </article>`).join("");
+  }
+  render();
+})();
+</script>
+</body>
+</html>
