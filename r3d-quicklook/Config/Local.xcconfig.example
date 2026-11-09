@@ -1,0 +1,7 @@
+// Copy to Config/Local.xcconfig to sign with your Apple Developer team.
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development
+DEVELOPMENT_TEAM = ABCDE12345
+
+// For distribution outside your Mac (Developer ID + notarization) also enable:
+// ENABLE_HARDENED_RUNTIME = YES

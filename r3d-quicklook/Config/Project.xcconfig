@@ -1,0 +1,14 @@
+// Project-wide defaults. Do not edit per machine; use the optional files below instead.
+
+// Ad-hoc ("Sign to Run Locally") by default so the project builds with no Apple account.
+// To sign with your team, create Config/Local.xcconfig (see Local.xcconfig.example).
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+ENABLE_HARDENED_RUNTIME = NO
+
+// Written by scripts/install-r3dsdk.sh when you add the RED R3D SDK (enables frame decoding).
+#include? "R3DSDK.local.xcconfig"
+
+// Your personal signing settings (git-ignored).
+#include? "Local.xcconfig"

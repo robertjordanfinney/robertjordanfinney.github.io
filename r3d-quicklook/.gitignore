@@ -1,0 +1,7 @@
+*.xcodeproj/
+build/
+DerivedData/
+Vendor/
+Config/R3DSDK.local.xcconfig
+Config/Local.xcconfig
+.DS_Store

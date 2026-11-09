@@ -1,0 +1,57 @@
+name: R3D Quick Look
+
+on:
+  push:
+    paths:
+      - "r3d-quicklook/**"
+      - ".github/workflows/r3d-quicklook.yml"
+  pull_request:
+    paths:
+      - "r3d-quicklook/**"
+      - ".github/workflows/r3d-quicklook.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: r3d-quicklook
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          xcodebuild -project R3DQuickLook.xcodeproj -scheme "R3D Preview" \
+            -destination 'platform=macOS' -derivedDataPath build test
+
+      - name: Release build
+        run: |
+          set -o pipefail
+          xcodebuild -project R3DQuickLook.xcodeproj -scheme "R3D Preview" \
+            -configuration Release -derivedDataPath build build
+
+      - name: Verify bundle
+        run: |
+          APP="build/Build/Products/Release/R3D Preview.app"
+          ls "$APP/Contents/PlugIns"
+          test -d "$APP/Contents/PlugIns/R3DPreviewExtension.appex"
+          test -d "$APP/Contents/PlugIns/R3DThumbnailExtension.appex"
+          codesign --verify --deep --strict "$APP"
+          codesign -d --entitlements - "$APP/Contents/PlugIns/R3DPreviewExtension.appex"
+          plutil -p "$APP/Contents/PlugIns/R3DPreviewExtension.appex/Contents/Info.plist" | grep -A3 NSExtensionPrincipalClass
+
+      - name: Package
+        run: ditto -c -k --keepParent "build/Build/Products/Release/R3D Preview.app" "R3D-Preview.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: R3D-Preview
+          path: r3d-quicklook/R3D-Preview.zip

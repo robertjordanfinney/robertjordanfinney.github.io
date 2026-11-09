@@ -1,0 +1,111 @@
+name: R3DQuickLook
+options:
+  bundleIdPrefix: io.github.robertjordanfinney
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+configFiles:
+  Debug: Config/Project.xcconfig
+  Release: Config/Project.xcconfig
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    CLANG_CXX_LANGUAGE_STANDARD: "c++17"
+    CLANG_ENABLE_OBJC_ARC: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    GENERATE_INFOPLIST_FILE: NO
+    SWIFT_OBJC_BRIDGING_HEADER: Shared/R3DKit-Bridging-Header.h
+
+targets:
+  R3DPreview:
+    type: application
+    platform: macOS
+    sources:
+      - App
+      - Shared
+    settings:
+      base:
+        PRODUCT_NAME: R3D Preview
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.robertjordanfinney.r3dpreview
+        INFOPLIST_FILE: App/Info.plist
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+    dependencies:
+      - target: R3DPreviewExtension
+      - target: R3DThumbnailExtension
+    postCompileScripts:
+      - name: Embed RED SDK runtime (optional)
+        basedOnDependencyAnalysis: false
+        script: |
+          # Copies REDR3D*.dylib etc. into the app when scripts/install-r3dsdk.sh has been run.
+          if [ -z "${R3DSDK_REDIST_DIR:-}" ] || [ ! -d "${R3DSDK_REDIST_DIR}" ]; then
+            echo "RED SDK runtime not configured; building header-only previews."
+            exit 0
+          fi
+          DEST="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+          mkdir -p "$DEST"
+          for lib in "${R3DSDK_REDIST_DIR}"/*.dylib; do
+            [ -e "$lib" ] || continue
+            cp -f "$lib" "$DEST/"
+            codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none "$DEST/$(basename "$lib")"
+          done
+
+  R3DPreviewExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - PreviewExtension
+      - Shared
+    settings:
+      base:
+        PRODUCT_NAME: R3DPreviewExtension
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.robertjordanfinney.r3dpreview.preview
+        INFOPLIST_FILE: PreviewExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PreviewExtension/PreviewExtension.entitlements
+    dependencies:
+      - sdk: Quartz.framework
+
+  R3DThumbnailExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - ThumbnailExtension
+      - Shared
+    settings:
+      base:
+        PRODUCT_NAME: R3DThumbnailExtension
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.robertjordanfinney.r3dpreview.thumbnail
+        INFOPLIST_FILE: ThumbnailExtension/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ThumbnailExtension/ThumbnailExtension.entitlements
+    dependencies:
+      - sdk: QuickLookThumbnailing.framework
+
+  R3DKitTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests
+      - Shared
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.robertjordanfinney.r3dpreview.tests
+
+schemes:
+  R3D Preview:
+    build:
+      targets:
+        R3DPreview: all
+        R3DKitTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - R3DKitTests
+    archive:
+      config: Release
